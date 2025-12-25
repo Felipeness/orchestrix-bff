@@ -28,8 +28,8 @@ COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/tsconfig.json ./
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 bun
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs bun
 USER bun
 
 # Expose port
