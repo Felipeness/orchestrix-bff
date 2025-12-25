@@ -5,6 +5,8 @@ import rateLimit from "@fastify/rate-limit";
 import { authMiddleware } from "./middleware/auth";
 import { healthRoutes } from "./routes/health";
 import { workflowRoutes } from "./routes/workflow";
+import { alertRoutes } from "./routes/alert";
+import { auditRoutes } from "./routes/audit";
 
 const app = Fastify({
   logger: {
@@ -43,6 +45,8 @@ await app.register(authMiddleware);
 // Routes
 await app.register(healthRoutes);
 await app.register(workflowRoutes, { prefix: "/api/v1" });
+await app.register(alertRoutes, { prefix: "/api/v1" });
+await app.register(auditRoutes, { prefix: "/api/v1" });
 
 // Start server
 const port = Number(process.env.PORT) || 3000;

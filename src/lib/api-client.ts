@@ -3,6 +3,8 @@ import { Effect, pipe } from "effect";
 const API_URL = process.env.API_URL || "http://localhost:8080";
 
 export class ApiError extends Error {
+  readonly _tag = "ApiError" as const;
+
   constructor(
     public status: number,
     message: string,
