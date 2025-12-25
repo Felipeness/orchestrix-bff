@@ -27,9 +27,7 @@ COPY --from=builder /app/src ./src
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/tsconfig.json ./
 
-# Create non-root user
-RUN groupadd --system --gid 1001 nodejs && \
-    useradd --system --uid 1001 --gid nodejs bun
+# Use existing bun user from base image
 USER bun
 
 # Expose port
