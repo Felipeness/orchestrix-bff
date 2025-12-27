@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { auditService } from '../services/audit';
@@ -15,7 +15,7 @@ export async function auditRoutes(app: FastifyInstance) {
 	app.addHook('preHandler', requireRole('admin'));
 
 	// List audit logs
-	app.get('/audit-logs', async (request: FastifyRequest, reply: FastifyReply) => {
+	app.get('/audit-logs', async (request: FastifyRequest) => {
 		const query = PaginationSchema.parse(request.query);
 		const result = await auditService.list(
 			request.token!,
@@ -29,7 +29,7 @@ export async function auditRoutes(app: FastifyInstance) {
 	// List audit logs by resource
 	app.get<{ Params: { type: string; id: string } }>(
 		'/audit-logs/resource/:type/:id',
-		async (request, reply) => {
+		async (request) => {
 			const query = PaginationSchema.parse(request.query);
 			const result = await auditService.listByResource(
 				request.params.type,
@@ -43,7 +43,7 @@ export async function auditRoutes(app: FastifyInstance) {
 	);
 
 	// List audit logs by user
-	app.get<{ Params: { userId: string } }>('/audit-logs/user/:userId', async (request, reply) => {
+	app.get<{ Params: { userId: string } }>('/audit-logs/user/:userId', async (request) => {
 		const query = PaginationSchema.parse(request.query);
 		const result = await auditService.listByUser(
 			request.params.userId,

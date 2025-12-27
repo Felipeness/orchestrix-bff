@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { alertService } from '../services/alert';
@@ -21,7 +21,7 @@ export async function alertRoutes(app: FastifyInstance) {
 	app.addHook('preHandler', requireAuth);
 
 	// List alerts
-	app.get('/alerts', async (request: FastifyRequest, reply: FastifyReply) => {
+	app.get('/alerts', async (request: FastifyRequest) => {
 		const query = PaginationSchema.parse(request.query);
 		const result = await alertService.list(request.token!, query.page, query.limit, query.status);
 		return result;
@@ -54,7 +54,7 @@ export async function alertRoutes(app: FastifyInstance) {
 	app.post<{ Params: { id: string } }>(
 		'/alerts/:id/acknowledge',
 		{ preHandler: requireRole('operator', 'admin') },
-		async (request, reply) => {
+		async (request) => {
 			const alert = await alertService.acknowledge(request.params.id, request.token!);
 			return { data: alert };
 		},
@@ -64,7 +64,7 @@ export async function alertRoutes(app: FastifyInstance) {
 	app.post<{ Params: { id: string } }>(
 		'/alerts/:id/resolve',
 		{ preHandler: requireRole('operator', 'admin') },
-		async (request, reply) => {
+		async (request) => {
 			const alert = await alertService.resolve(request.params.id, request.token!);
 			return { data: alert };
 		},

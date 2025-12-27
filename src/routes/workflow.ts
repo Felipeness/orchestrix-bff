@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { workflowService } from '../services/workflow';
@@ -32,7 +32,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 	app.addHook('preHandler', requireAuth);
 
 	// List workflows
-	app.get('/workflows', async (request: FastifyRequest, reply: FastifyReply) => {
+	app.get('/workflows', async (request: FastifyRequest) => {
 		const query = PaginationSchema.parse(request.query);
 		const result = await workflowService.list(request.token!, query.page, query.limit);
 		return result;
@@ -65,7 +65,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 	app.put<{ Params: { id: string } }>(
 		'/workflows/:id',
 		{ preHandler: requireRole('operator', 'admin') },
-		async (request, reply) => {
+		async (request) => {
 			const body = UpdateWorkflowSchema.parse(request.body);
 			const workflow = await workflowService.update(request.params.id, body, request.token!);
 			return { data: workflow };
@@ -94,7 +94,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 	);
 
 	// List executions for a workflow
-	app.get<{ Params: { id: string } }>('/workflows/:id/executions', async (request, reply) => {
+	app.get<{ Params: { id: string } }>('/workflows/:id/executions', async (request) => {
 		const query = PaginationSchema.parse(request.query);
 		const result = await workflowService.listExecutions(
 			request.params.id,
