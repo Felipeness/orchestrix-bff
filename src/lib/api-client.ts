@@ -52,11 +52,12 @@ export class ApiClient {
 		});
 
 		if (!response.ok) {
-			let details: unknown;
+			const text = await response.text();
+			let details: unknown = text;
 			try {
-				details = await response.json();
+				details = JSON.parse(text);
 			} catch {
-				details = await response.text();
+				// Keep as text if not valid JSON
 			}
 			throw new ApiError(response.status, response.statusText, details);
 		}
