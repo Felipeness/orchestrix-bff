@@ -1,0 +1,1393 @@
+openapi: 3.1.0
+info:
+  title: Orchestrix API
+  version: 1.0.0
+  description: |
+    API de orquestração de workflows e execuções.
+
+    ## Autenticação
+    Todas as rotas (exceto health checks) requerem autenticação via JWT Bearer token.
+
+    ## Multi-tenancy
+    Todos os recursos são isolados por tenant. O tenant é determinado pelo token JWT.
+
+    ## Paginação
+    Endpoints de listagem suportam paginação via query parameters `page` e `limit`.
+  contact:
+    name: Orchestrix Team
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development
+  - url: https://api.orchestrix.io/v1
+    description: Production
+security:
+  - BearerAuth: []
+tags:
+  - name: Workflows
+    description: Gerenciamento de workflows
+  - name: Executions
+    description: Execuções de workflows
+  - name: Alerts
+    description: Sistema de alertas
+  - name: AuditLogs
+    description: Logs de auditoria
+  - name: Health
+    description: Health checks
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: Returns the overall health status of the service
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: healthy
+                checks:
+                  database:
+                    status: healthy
+                  temporal:
+                    status: healthy
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: unhealthy
+                checks:
+                  database:
+                    status: unhealthy
+                    message: Connection timeout
+  /health/live:
+    get:
+      operationId: livenessProbe
+      summary: Liveness probe
+      description: Kubernetes liveness probe endpoint
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: healthy
+        '503':
+          description: Service is not alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /health/ready:
+    get:
+      operationId: readinessProbe
+      summary: Readiness probe
+      description: Kubernetes readiness probe endpoint
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: healthy
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /workflows:
+    get:
+      operationId: listWorkflows
+      summary: List workflows
+      description: Returns a paginated list of workflows for the current tenant
+      tags:
+        - Workflows
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/WorkflowStatusQuery'
+        - $ref: '#/components/parameters/SearchQuery'
+      responses:
+        '200':
+          description: List of workflows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWorkflows'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: createWorkflow
+      summary: Create workflow
+      description: Creates a new workflow definition
+      tags:
+        - Workflows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequest'
+            examples:
+              simple:
+                summary: Simple workflow
+                value:
+                  name: Order Processing
+                  description: Processes incoming orders
+                  definition:
+                    steps:
+                      - name: validate
+                        type: validate_order
+                      - name: process
+                        type: process_payment
+              scheduled:
+                summary: Scheduled workflow
+                value:
+                  name: Daily Report
+                  definition:
+                    steps:
+                      - name: generate
+                        type: generate_report
+                  schedule: 0 9 * * *
+      responses:
+        '201':
+          description: Workflow created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /workflows/{id}:
+    get:
+      operationId: getWorkflow
+      summary: Get workflow
+      description: Returns a single workflow by ID
+      tags:
+        - Workflows
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Workflow found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      operationId: updateWorkflow
+      summary: Update workflow
+      description: Updates an existing workflow. Version is auto-incremented.
+      tags:
+        - Workflows
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkflowRequest'
+            examples:
+              update_status:
+                summary: Activate workflow
+                value:
+                  status: active
+              update_definition:
+                summary: Update definition
+                value:
+                  definition:
+                    steps:
+                      - name: step1
+                        type: action
+      responses:
+        '200':
+          description: Workflow updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      operationId: deleteWorkflow
+      summary: Delete workflow
+      description: Deletes a workflow by ID
+      tags:
+        - Workflows
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /workflows/{id}/execute:
+    post:
+      operationId: executeWorkflow
+      summary: Execute workflow
+      description: Triggers a new execution of the workflow
+      tags:
+        - Workflows
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteWorkflowRequest'
+            examples:
+              with_input:
+                summary: With input data
+                value:
+                  input:
+                    order_id: '12345'
+                    customer_id: '67890'
+              empty:
+                summary: No input
+                value: {}
+      responses:
+        '202':
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /workflows/{id}/executions:
+    get:
+      operationId: listWorkflowExecutions
+      summary: List workflow executions
+      description: Returns a paginated list of executions for a specific workflow
+      tags:
+        - Workflows
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/ExecutionStatusQuery'
+      responses:
+        '200':
+          description: List of executions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExecutions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /executions:
+    get:
+      operationId: listExecutions
+      summary: List executions
+      description: Returns a paginated list of all executions for the current tenant
+      tags:
+        - Executions
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/ExecutionStatusQuery'
+      responses:
+        '200':
+          description: List of executions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExecutions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /executions/{id}:
+    get:
+      operationId: getExecution
+      summary: Get execution
+      description: Returns a single execution by ID
+      tags:
+        - Executions
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Execution found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /executions/{id}/cancel:
+    post:
+      operationId: cancelExecution
+      summary: Cancel execution
+      description: Cancels a running execution
+      tags:
+        - Executions
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Execution cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Cannot cancel - execution is not running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INVALID_STATE
+                message: Cannot cancel execution that is not running
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /alerts:
+    get:
+      operationId: listAlerts
+      summary: List alerts
+      description: Returns a paginated list of alerts for the current tenant
+      tags:
+        - Alerts
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/AlertStatusQuery'
+        - name: severity
+          in: query
+          required: false
+          description: Filter by severity
+          schema:
+            type: string
+            enum:
+              - info
+              - warning
+              - critical
+      responses:
+        '200':
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAlerts'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: createAlert
+      summary: Create alert
+      description: Creates a new alert
+      tags:
+        - Alerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlertRequest'
+            examples:
+              critical:
+                summary: Critical alert
+                value:
+                  severity: critical
+                  title: Workflow execution failed
+                  message: Order processing failed due to payment gateway timeout
+                  workflow_id: 550e8400-e29b-41d4-a716-446655440000
+                  execution_id: 550e8400-e29b-41d4-a716-446655440001
+              warning:
+                summary: Warning alert
+                value:
+                  severity: warning
+                  title: High latency detected
+                  message: Workflow execution time exceeded threshold
+      responses:
+        '201':
+          description: Alert created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /alerts/{id}:
+    get:
+      operationId: getAlert
+      summary: Get alert
+      description: Returns a single alert by ID
+      tags:
+        - Alerts
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Alert found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /alerts/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAlert
+      summary: Acknowledge alert
+      description: Marks an alert as acknowledged
+      tags:
+        - Alerts
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Cannot acknowledge - alert is already acknowledged or resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INVALID_STATE
+                message: Alert is already acknowledged
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /alerts/{id}/resolve:
+    post:
+      operationId: resolveAlert
+      summary: Resolve alert
+      description: Marks an alert as resolved
+      tags:
+        - Alerts
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Alert resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Cannot resolve - alert is already resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INVALID_STATE
+                message: Alert is already resolved
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      summary: List audit logs
+      description: Returns a paginated list of audit logs for the current tenant
+      tags:
+        - AuditLogs
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/EventTypeQuery'
+        - name: resource_type
+          in: query
+          required: false
+          description: Filter by resource type
+          schema:
+            type: string
+            enum:
+              - workflow
+              - execution
+              - alert
+        - name: action
+          in: query
+          required: false
+          description: Filter by action
+          schema:
+            type: string
+            enum:
+              - create
+              - update
+              - delete
+              - execute
+              - cancel
+              - acknowledge
+              - resolve
+      responses:
+        '200':
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /audit-logs/resource/{resourceType}/{resourceId}:
+    get:
+      operationId: listAuditLogsByResource
+      summary: List audit logs by resource
+      description: Returns a paginated list of audit logs for a specific resource
+      tags:
+        - AuditLogs
+      parameters:
+        - $ref: '#/components/parameters/ResourceTypePath'
+        - $ref: '#/components/parameters/ResourceIdPath'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: List of audit logs for the resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /audit-logs/user/{userId}:
+    get:
+      operationId: listAuditLogsByUser
+      summary: List audit logs by user
+      description: Returns a paginated list of audit logs for a specific user
+      tags:
+        - AuditLogs
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: List of audit logs for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogs'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from Keycloak
+  schemas:
+    HealthStatus:
+      type: object
+      description: Health check response
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - unhealthy
+            - degraded
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+              message:
+                type: string
+          description: Individual health checks
+    WorkflowStatus:
+      type: string
+      enum:
+        - active
+        - inactive
+        - draft
+      description: Workflow status
+    Workflow:
+      type: object
+      description: Workflow definition for orchestration
+      required:
+        - id
+        - tenant_id
+        - name
+        - definition
+        - status
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique workflow identifier
+          examples:
+            - 550e8400-e29b-41d4-a716-446655440000
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant identifier
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          description: Workflow name
+          examples:
+            - Order Processing Workflow
+        description:
+          type: string
+          maxLength: 500
+          description: Optional workflow description
+          examples:
+            - Processes incoming orders and triggers notifications
+        definition:
+          type: object
+          additionalProperties: true
+          description: Workflow definition as JSON
+        schedule:
+          type: string
+          description: Cron expression for scheduled execution (e.g., "0 * * * *" or "@daily")
+          examples:
+            - 0 * * * *
+            - '@daily'
+        status:
+          $ref: '#/components/schemas/WorkflowStatus'
+        version:
+          type: integer
+          minimum: 1
+          description: Version number (auto-incremented on update)
+          examples:
+            - 1
+        created_by:
+          type: string
+          format: uuid
+          description: User who created the workflow
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    PaginatedWorkflows:
+      type: object
+      description: Paginated list of workflows
+      required:
+        - data
+        - total
+        - page
+        - limit
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workflow'
+        total:
+          type: integer
+          minimum: 0
+          description: Total number of items
+        page:
+          type: integer
+          minimum: 1
+          description: Current page
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Items per page
+    Error:
+      type: object
+      description: Error response
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code
+          examples:
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - UNAUTHORIZED
+            - INTERNAL_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+    CreateWorkflowRequest:
+      type: object
+      description: Request body for creating a workflow
+      required:
+        - name
+        - definition
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          description: Workflow name
+        description:
+          type: string
+          maxLength: 500
+          description: Optional description
+        definition:
+          type: object
+          additionalProperties: true
+          description: Workflow definition
+        schedule:
+          type: string
+          description: Optional cron schedule
+    WorkflowResponse:
+      type: object
+      description: Single workflow response wrapper
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Workflow'
+    UpdateWorkflowRequest:
+      type: object
+      description: Request body for updating a workflow
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        definition:
+          type: object
+          additionalProperties: true
+        schedule:
+          type: string
+        status:
+          $ref: '#/components/schemas/WorkflowStatus'
+    ExecuteWorkflowRequest:
+      type: object
+      description: Request body for executing a workflow
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+          description: Input data for the workflow execution
+    ExecutionStatus:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+      description: Execution status
+    Execution:
+      type: object
+      description: Workflow execution instance
+      required:
+        - id
+        - tenant_id
+        - workflow_id
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique execution identifier
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant identifier
+        workflow_id:
+          type: string
+          format: uuid
+          description: Parent workflow identifier
+        temporal_workflow_id:
+          type: string
+          description: Temporal workflow ID
+        temporal_run_id:
+          type: string
+          description: Temporal run ID
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        input:
+          type: object
+          additionalProperties: true
+          description: Input data provided at execution
+        output:
+          type: object
+          additionalProperties: true
+          description: Output data from execution
+        error:
+          type: string
+          description: Error message if execution failed
+        started_at:
+          type: string
+          format: date-time
+          description: Execution start time
+        completed_at:
+          type: string
+          format: date-time
+          description: Execution completion time
+        created_by:
+          type: string
+          format: uuid
+          description: User who triggered the execution
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+    ExecutionResponse:
+      type: object
+      description: Single execution response wrapper
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Execution'
+    PaginatedExecutions:
+      type: object
+      description: Paginated list of executions
+      required:
+        - data
+        - total
+        - page
+        - limit
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Execution'
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+    AlertSeverity:
+      type: string
+      enum:
+        - info
+        - warning
+        - critical
+      description: Alert severity level
+    AlertStatus:
+      type: string
+      enum:
+        - open
+        - acknowledged
+        - resolved
+      description: Alert status
+    Alert:
+      type: object
+      description: System alert for workflow events
+      required:
+        - id
+        - tenant_id
+        - severity
+        - title
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique alert identifier
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant identifier
+        workflow_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Related workflow (if any)
+        execution_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Related execution (if any)
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        title:
+          type: string
+          maxLength: 200
+          description: Alert title
+        message:
+          type: string
+          nullable: true
+          description: Detailed alert message
+        status:
+          $ref: '#/components/schemas/AlertStatus'
+        acknowledged_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the alert was acknowledged
+        acknowledged_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who acknowledged
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the alert was resolved
+        resolved_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who resolved
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+    PaginatedAlerts:
+      type: object
+      description: Paginated list of alerts
+      required:
+        - data
+        - total
+        - page
+        - limit
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+    CreateAlertRequest:
+      type: object
+      description: Request body for creating an alert
+      required:
+        - severity
+        - title
+      properties:
+        workflow_id:
+          type: string
+          format: uuid
+          description: Related workflow
+        execution_id:
+          type: string
+          format: uuid
+          description: Related execution
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        title:
+          type: string
+          maxLength: 200
+        message:
+          type: string
+          description: Detailed message
+    AlertResponse:
+      type: object
+      description: Single alert response wrapper
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/Alert'
+    AuditLog:
+      type: object
+      description: Audit log entry for tracking changes
+      required:
+        - id
+        - tenant_id
+        - event_type
+        - resource_type
+        - action
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique audit log identifier
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant identifier
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who performed the action
+        event_type:
+          type: string
+          description: Type of event
+          examples:
+            - workflow.created
+            - execution.started
+        resource_type:
+          type: string
+          description: Type of resource affected
+          examples:
+            - workflow
+            - execution
+            - alert
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of the affected resource
+        action:
+          type: string
+          description: Action performed
+          examples:
+            - create
+            - update
+            - delete
+        old_value:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Previous state of the resource
+        new_value:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: New state of the resource
+        ip_address:
+          type: string
+          nullable: true
+          description: Client IP address
+        user_agent:
+          type: string
+          nullable: true
+          description: Client user agent
+        created_at:
+          type: string
+          format: date-time
+          description: When the event occurred
+    PaginatedAuditLogs:
+      type: object
+      description: Paginated list of audit logs
+      required:
+        - data
+        - total
+        - page
+        - limit
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+  responses:
+    Unauthorized:
+      description: Unauthorized - Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing_token:
+              summary: Missing Token
+              value:
+                code: UNAUTHORIZED
+                message: Missing or invalid authorization header
+            expired_token:
+              summary: Expired Token
+              value:
+                code: UNAUTHORIZED
+                message: Token has expired
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            internal_error:
+              summary: Internal Error
+              value:
+                code: INTERNAL_ERROR
+                message: An unexpected error occurred
+    BadRequest:
+      description: Bad Request - Invalid input data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation_error:
+              summary: Validation Error
+              value:
+                code: VALIDATION_ERROR
+                message: Invalid request body
+                details:
+                  name: must be at least 3 characters
+    Conflict:
+      description: Conflict - Resource already exists or state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            conflict:
+              summary: Conflict
+              value:
+                code: CONFLICT
+                message: Resource already exists
+    NotFound:
+      description: Not Found - Resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            not_found:
+              summary: Not Found
+              value:
+                code: NOT_FOUND
+                message: Resource not found
+    NoContent:
+      description: No Content - Successful operation with no response body
+    UnprocessableEntity:
+      description: Unprocessable Entity - Business rule violation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            business_error:
+              summary: Business Rule Violation
+              value:
+                code: BUSINESS_ERROR
+                message: Cannot execute inactive workflow
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            forbidden:
+              summary: Forbidden
+              value:
+                code: FORBIDDEN
+                message: You don't have permission to access this resource
+  parameters:
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      description: Page number (1-based)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    WorkflowStatusQuery:
+      name: status
+      in: query
+      required: false
+      description: Filter by workflow status
+      schema:
+        type: string
+        enum:
+          - active
+          - inactive
+          - draft
+    SearchQuery:
+      name: search
+      in: query
+      required: false
+      description: Search term
+      schema:
+        type: string
+        maxLength: 100
+    IdPath:
+      name: id
+      in: path
+      required: true
+      description: Resource UUID
+      schema:
+        type: string
+        format: uuid
+    ExecutionStatusQuery:
+      name: status
+      in: query
+      required: false
+      description: Filter by execution status
+      schema:
+        type: string
+        enum:
+          - pending
+          - running
+          - completed
+          - failed
+          - cancelled
+    AlertStatusQuery:
+      name: status
+      in: query
+      required: false
+      description: Filter by alert status
+      schema:
+        type: string
+        enum:
+          - open
+          - acknowledged
+          - resolved
+    EventTypeQuery:
+      name: event_type
+      in: query
+      required: false
+      description: Filter by event type
+      schema:
+        type: string
+    ResourceTypePath:
+      name: resourceType
+      in: path
+      required: true
+      description: Type of resource (workflow, execution, alert)
+      schema:
+        type: string
+        enum:
+          - workflow
+          - execution
+          - alert
+    ResourceIdPath:
+      name: resourceId
+      in: path
+      required: true
+      description: Resource UUID
+      schema:
+        type: string
+        format: uuid
+    UserIdPath:
+      name: userId
+      in: path
+      required: true
+      description: User UUID
+      schema:
+        type: string
+        format: uuid
