@@ -47,7 +47,7 @@ class AlertService {
 		}
 
 		const response = await apiClient.get<PaginatedResponse<Alert>>(
-			`/alerts?${params.toString()}`,
+			`/api/v1/alerts?${params.toString()}`,
 			token,
 		);
 		return response;
@@ -55,7 +55,7 @@ class AlertService {
 
 	async getById(id: string, token: string): Promise<Alert | null> {
 		try {
-			const response = await apiClient.get<{ data: Alert }>(`/alerts/${id}`, token);
+			const response = await apiClient.get<{ data: Alert }>(`/api/v1/alerts/${id}`, token);
 			return response.data;
 		} catch {
 			return null;
@@ -63,17 +63,17 @@ class AlertService {
 	}
 
 	async create(input: CreateAlertInput, token: string): Promise<Alert> {
-		const response = await apiClient.post<{ data: Alert }>('/alerts', input, token);
+		const response = await apiClient.post<{ data: Alert }>('/api/v1/alerts', input, token);
 		return response.data;
 	}
 
 	async acknowledge(id: string, token: string): Promise<Alert> {
-		const response = await apiClient.post<{ data: Alert }>(`/alerts/${id}/acknowledge`, {}, token);
+		const response = await apiClient.post<{ data: Alert }>(`/api/v1/alerts/${id}/acknowledge`, {}, token);
 		return response.data;
 	}
 
 	async resolve(id: string, token: string): Promise<Alert> {
-		const response = await apiClient.post<{ data: Alert }>(`/alerts/${id}/resolve`, {}, token);
+		const response = await apiClient.post<{ data: Alert }>(`/api/v1/alerts/${id}/resolve`, {}, token);
 		return response.data;
 	}
 }

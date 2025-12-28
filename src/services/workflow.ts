@@ -74,7 +74,8 @@ export class WorkflowService {
 
 	async getById(id: string, token: string): Promise<Workflow | null> {
 		try {
-			return await apiClient.get<Workflow>(`/api/v1/workflows/${id}`, token);
+			const response = await apiClient.get<{ data: Workflow }>(`/api/v1/workflows/${id}`, token);
+			return response.data;
 		} catch (error) {
 			if (error instanceof ApiError) {
 				if (error.status === 404) return null;
@@ -87,11 +88,13 @@ export class WorkflowService {
 	}
 
 	async create(input: CreateWorkflowInput, token: string): Promise<Workflow> {
-		return apiClient.post<Workflow>('/api/v1/workflows', input, token);
+		const response = await apiClient.post<{ data: Workflow }>('/api/v1/workflows', input, token);
+		return response.data;
 	}
 
 	async update(id: string, input: UpdateWorkflowInput, token: string): Promise<Workflow> {
-		return apiClient.put<Workflow>(`/api/v1/workflows/${id}`, input, token);
+		const response = await apiClient.put<{ data: Workflow }>(`/api/v1/workflows/${id}`, input, token);
+		return response.data;
 	}
 
 	async delete(id: string, token: string): Promise<void> {
@@ -103,12 +106,18 @@ export class WorkflowService {
 		input: ExecuteWorkflowInput,
 		token: string,
 	): Promise<Execution> {
-		return apiClient.post<Execution>(`/api/v1/workflows/${workflowId}/execute`, input, token);
+		const response = await apiClient.post<{ data: Execution }>(
+			`/api/v1/workflows/${workflowId}/execute`,
+			input,
+			token,
+		);
+		return response.data;
 	}
 
 	async getExecution(id: string, token: string): Promise<Execution | null> {
 		try {
-			return await apiClient.get<Execution>(`/api/v1/executions/${id}`, token);
+			const response = await apiClient.get<{ data: Execution }>(`/api/v1/executions/${id}`, token);
+			return response.data;
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 404) {
 				return null;
