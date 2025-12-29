@@ -49,35 +49,39 @@ Orchestrix é uma plataforma AIOps completa que **substitui Grafana + Datadog + 
 | Cache | Redis (ioredis) | Response caching |
 | ORM | Drizzle | Database access |
 
-## Project Structure
+## Project Structure (Hexagonal Architecture)
 
 ```
 orchestrix-bff/
 ├── src/
-│   ├── index.ts           # Entry point
-│   ├── routes/            # Fastify route handlers
-│   │   ├── alert.ts       # Alert routes
-│   │   ├── audit.ts       # Audit log routes
-│   │   ├── health.ts      # Health checks
-│   │   └── workflow.ts    # Workflow routes
-│   ├── services/          # Business logic & API calls
-│   │   ├── alert.ts       # Alert service
-│   │   ├── audit.ts       # Audit service
-│   │   └── workflow.ts    # Workflow service
-│   ├── middleware/        # Fastify plugins
-│   │   └── auth.ts        # Keycloak auth
-│   ├── schemas/           # Zod validation schemas
-│   └── lib/               # Utilities
-│       └── api-client.ts  # Core API client
+│   ├── index.ts                # Entry point
+│   ├── core/
+│   │   ├── domain/             # Domain models & types
+│   │   ├── port/               # Interfaces (ports)
+│   │   └── service/            # Business logic
+│   │       ├── alert.ts        # Alert service
+│   │       ├── audit.ts        # Audit service
+│   │       └── workflow.ts     # Workflow service
+│   ├── routes/                 # HTTP route handlers (driving adapter)
+│   │   ├── alert.ts            # Alert routes
+│   │   ├── audit.ts            # Audit log routes
+│   │   ├── health.ts           # Health checks
+│   │   └── workflow.ts         # Workflow routes
+│   ├── middleware/             # Fastify plugins
+│   │   └── auth.ts             # Keycloak auth
+│   ├── schemas/                # Zod validation schemas
+│   └── lib/                    # Utilities
+│       └── api-client.ts       # Core API client (driven adapter)
 ├── drizzle/
-│   ├── schema.ts          # Database schema
-│   └── migrations/        # SQL migrations
-└── openapi.yaml           # API documentation
+│   ├── schema.ts               # Database schema
+│   └── migrations/             # SQL migrations
+└── openapi.yaml                # API documentation
 ```
 
 ## Current Status
 
 ### Implemented
+- [x] **Hexagonal Architecture** - Ports & Adapters pattern
 - [x] Keycloak authentication passthrough
 - [x] Workflow CRUD proxying
 - [x] Workflow execution
@@ -86,6 +90,7 @@ orchestrix-bff/
 - [x] Health checks
 - [x] CORS configuration
 - [x] OpenAPI documentation
+- [x] Unit tests for services
 
 ### In Progress
 - [ ] Redis caching layer
