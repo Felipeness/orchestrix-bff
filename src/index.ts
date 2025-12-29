@@ -2,11 +2,44 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
+
+// Middleware
 import { authMiddleware } from './middleware/auth';
-import { alertRoutes } from './routes/alert';
-import { auditRoutes } from './routes/audit';
+
+// Driving Adapters (HTTP Routes)
+import { createWorkflowRoutes } from './adapter/driving/http/workflow';
+import { createAlertRoutes } from './adapter/driving/http/alert';
+import { createAuditRoutes } from './adapter/driving/http/audit';
+
+// Driven Adapters (Infrastructure)
+import { OrchetrixApiAdapter } from './adapter/driven/api/orchestrix-api';
+
+// Core Services
+import { WorkflowService, AlertService, AuditService } from './core/service';
+
+// Health route (simple, no DI needed)
 import { healthRoutes } from './routes/health';
-import { workflowRoutes } from './routes/workflow';
+
+// ============================================================================
+// DEPENDENCY INJECTION
+// ============================================================================
+
+// Driven Adapters (Secondary/Infrastructure)
+const orchestrixApi = new OrchetrixApiAdapter();
+
+// Core Services (Application Layer)
+const workflowService = new WorkflowService(orchestrixApi);
+const alertService = new AlertService(orchestrixApi);
+const auditService = new AuditService(orchestrixApi);
+
+// Driving Adapters (Primary/HTTP Routes)
+const workflowRoutes = createWorkflowRoutes(workflowService);
+const alertRoutes = createAlertRoutes(alertService);
+const auditRoutes = createAuditRoutes(auditService);
+
+// ============================================================================
+// APP SETUP
+// ============================================================================
 
 const app = Fastify({
 	logger: {
@@ -39,13 +72,22 @@ await app.register(rateLimit, {
 // Auth middleware (extracts token from Authorization header)
 await app.register(authMiddleware);
 
-// Routes
+// ============================================================================
+// ROUTES
+// ============================================================================
+
+// Health routes (no auth required)
 await app.register(healthRoutes);
+
+// API routes (with auth)
 await app.register(workflowRoutes, { prefix: '/api/v1' });
 await app.register(alertRoutes, { prefix: '/api/v1' });
 await app.register(auditRoutes, { prefix: '/api/v1' });
 
-// Start server
+// ============================================================================
+// SERVER
+// ============================================================================
+
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || '0.0.0.0';
 
